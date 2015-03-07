@@ -65,16 +65,12 @@ def init():
 # their values. Just bear in mind: whatever you do here will end up in
 # config.h.
 def resolve():
-    # If user did not set sound on command line, it is autodetected.
-    if opt('sound') is None and pkg_exists('alsa', '--atleast-version=1.0.10'):
-        opt_set('sound', True)
+    opt_new_from_pkg('gtk2', 'gtk+-2.0')
+    opt_new_from_pkg('x11', 'x11')
+    opt_new_from_pkg('gdk_pixbuf', 'gdk-pixbuf-2.0')
+    opt_new_from_pkg('glib2', 'glib-2.0')
+    opt_new_from_pkg('gdk2', 'gdk-2.0')
 
-    # alsa is required, only if "sound" is enabled.
-    if opt('sound'):
-        # if alsa is not installed, will raise exception
-        opt_new_from_pkg('alsa', 'alsa', pversion = '--atleast-version=1.0.10')
-
-    opt_new('cflags_extra', default='-I$(TOPDIR)/include')
     
 def detect_project_name():
     # Hardcode here the name of your project
@@ -92,11 +88,5 @@ def detect_project_version():
 
 # Give a summary on created configuration
 def report():
-    str = "Configuration:\n"
-    str += "  Sound plugin:  "
-    if opt('sound'):
-        str += "yes\n"
-    else:
-        str += "no\n"
-    print str,
+    pass
 

@@ -1,3 +1,8 @@
+wallpaper.o
+wallpaper.d
+args.o
+args.d
+wallpaper
 gtksetroot.o
 gtksetroot.d
 gtksetroot
