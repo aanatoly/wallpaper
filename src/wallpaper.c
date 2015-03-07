@@ -1,4 +1,4 @@
-
+#include <gtk/gtk.h>
 #include <glib.h>
 #include <glib/gprintf.h>
 #include <gdk-pixbuf/gdk-pixbuf.h>
@@ -16,11 +16,10 @@
 struct config_t conf;
 
 /* global vars */
-static GdkPixbuf *pixbuf;
-static GdkPixbuf *bg;
 static Display *dpy;
 static Window root;
-static int sw, sh;
+
+#if 0
 
 /* Get lower win from window stack and check if it is a dekstop win */
 static Window
@@ -74,6 +73,8 @@ x11_get_desktop_win()
         
     return a == awtd ? win : None;
 }
+#endif
+
 
 static int
 x11_get_win_depth(Window win)
@@ -90,7 +91,6 @@ x11_get_win_depth(Window win)
 static Pixmap
 x11_create_pmap(Window win, GdkPixbuf *pix, int depth)
 {
-    int rc;
     Pixmap pmap;
     GdkPixmap *gpmap;
     int w, h;
@@ -122,7 +122,7 @@ static Pixmap
 x11_set_bg_pix_real(GdkPixbuf *pix)
 {
     Pixmap pmap;
-    int depth, depth2;
+    int depth;
     Window win;
 
     win = root;
@@ -138,7 +138,7 @@ x11_set_bg_pix_real(GdkPixbuf *pix)
     XFlush(dpy);
 
     return pmap;
-    
+#if 0
     win = x11_get_desktop_win();
     if (win == None)
         return;
@@ -151,6 +151,7 @@ x11_set_bg_pix_real(GdkPixbuf *pix)
     XSetWindowBackgroundPixmap(dpy, win, pmap);
     XClearWindow(dpy, win);
     XFlush(dpy);
+#endif
 }
 
 static void
