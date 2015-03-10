@@ -155,6 +155,15 @@ x11_set_bg_pix_real(GdkPixbuf *pix)
 }
 
 static void
+x11_handle_error(Display * d, XErrorEvent * ev)
+{
+    char buf[256];
+
+    XGetErrorText(GDK_DISPLAY(), ev->error_code, buf, 256);
+    DBG("fbpanel : X error: %s\n", buf);
+}
+
+static void
 x11_set_bg_pix(GdkPixbuf *pix)
 {
     Atom type;
@@ -167,6 +176,8 @@ x11_set_bg_pix(GdkPixbuf *pix)
 
     XSetCloseDownMode(dpy, RetainPermanent);
     XGrabServer(dpy);
+    XSetErrorHandler((XErrorHandler) x11_handle_error);
+
     DBG("grab ok\n");
     ae = XInternAtom(dpy, "ESETROOT_PMAP_ID", False);
     ax = XInternAtom(dpy, "_XROOTPMAP_ID", False);
@@ -276,7 +287,7 @@ pix_create(struct config_t *conf)
     c = conf->rgb;
     p = (c.red & 0xFF) << 24 | (c.green & 0xFF) << 16 | (c.blue & 0xFF) << 8;
     gdk_pixbuf_fill(bg, p);
-
+    DBG("bgimg filled with #%x%x%x color is ready\n", c.red, c.green, c.blue);
     if (!conf->image)
         return bg;
     
@@ -286,6 +297,7 @@ pix_create(struct config_t *conf)
         return NULL;
     }
     pix_composite(conf, bg, img);
+    DBG("bgimg with composited image is ready\n");
     g_object_unref(img);
 
     return bg;
