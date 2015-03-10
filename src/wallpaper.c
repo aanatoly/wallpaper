@@ -285,7 +285,7 @@ pix_create(struct config_t *conf)
         return NULL;
     }
     c = conf->rgb;
-    p = (c.red & 0xFF) << 24 | (c.green & 0xFF) << 16 | (c.blue & 0xFF) << 8;
+    p = (c.red >> 8) << 24 | (c.green >> 8) << 16 | (c.blue >> 8) << 8;
     gdk_pixbuf_fill(bg, p);
     DBG("bgimg filled with #%x%x%x color is ready\n", c.red, c.green, c.blue);
     if (!conf->image)
