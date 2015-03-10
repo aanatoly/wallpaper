@@ -10,5 +10,10 @@ wallpaper_cflags += $(foreach v,$(PKGS),$($(v)_CFLAGS))
 wallpaper_libs += $(foreach v,$(PKGS),$($(v)_LIBS))
 wallpaper_type = bin
 
+install:
+	$Qinstall -D -m 755 -T wallpaper-gui \
+		$(DESTDIR)$(BINDIR)/wallpaper-gui
+
+
 
 include $(TOPDIR)/.config/rules.mk
