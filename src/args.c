@@ -56,7 +56,7 @@ parse_scale(const gchar *option_name, const gchar *value,
     return (scale != -1);
 }
 
-static char *desription = "For example:\n  gtksetroot --color=#ffd2ac "
+static char *desription = "For example:\n  wallpaper --color=#ffd2ac "
   "--scale=fit  ~/pics/img002.jpg\n";
 
 static GOptionEntry entries[] =
