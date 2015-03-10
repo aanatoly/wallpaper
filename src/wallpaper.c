@@ -19,75 +19,19 @@ struct config_t conf;
 static Display *dpy;
 static Window root;
 
-#if 0
-
-/* Get lower win from window stack and check if it is a dekstop win */
-static Window
-x11_get_desktop_win()
-{
-    Atom type;
-    gulong nitems, bytes_after;
-    gint format;
-    guchar *data;
-    int rc;
-    Window win = None;
-    char *npls = "_NET_CLIENT_LIST_STACKING";
-    char *npwt = "_NET_WM_WINDOW_TYPE";
-    char *npwtd = "_NET_WM_WINDOW_TYPE_DESKTOP";
-    Atom als, awt, awtd, a;
-    
-    als = XInternAtom(dpy, npls, False);
-    DBG("atom for %s, %lu\n", npls, als);
-    rc = XGetWindowProperty(dpy, root, als,
-        0L, 1L, False, XA_WINDOW,
-        &type, &format, &nitems, &bytes_after,
-        &data);
-    DBG("get prop %s: %d\n", npls, rc);
-    if (rc != Success)
-        return None;
-    
-    if (type == XA_WINDOW && format == 32 && nitems > 0) 
-        win = * (Window *) data;
-    DBG("win %lx\n", win);
-    XFree(data);
-
-    if (win == None)
-        return None;
-    
-    awt = XInternAtom(dpy, npwt, False);
-    DBG("atom for %s, %lu\n", npwt, awt);
-    awtd = XInternAtom(dpy, npwtd, False);
-    DBG("atom for %s, %lu\n", npwtd, awtd);
-    rc = XGetWindowProperty(dpy, win, awt,
-        0L, 1L, False, XA_ATOM,
-        &type, &format, &nitems, &bytes_after,
-        &data);
-    DBG("get prop %s: %d\n", npwt, rc);
-    if (rc != Success)
-        return None;
-
-    if (type == XA_ATOM && format == 32 && nitems == 1) 
-        a = * (Atom *) data;
-    DBG("atom of win type of %lx is %lu\n", win, a);
-    XFree(data);
-        
-    return a == awtd ? win : None;
-}
-#endif
-
 
 static int
 x11_get_win_depth(Window win)
 {
     XWindowAttributes xwa;
     int rc;
-    
+
     rc = XGetWindowAttributes(dpy, win, &xwa);
     DBG("get depth for %lx, rc %d , depth %d\n", win, rc, xwa.depth);
     return rc ? xwa.depth : 0;
 }
-    
-    
+
+
 static Pixmap
 x11_create_pmap(Window win, GdkPixbuf *pix, int depth)
 {
@@ -95,7 +39,7 @@ x11_create_pmap(Window win, GdkPixbuf *pix, int depth)
     GdkPixmap *gpmap;
     int w, h;
     GdkGC *gc;
-    
+
     w = gdk_pixbuf_get_width(pix);
     h = gdk_pixbuf_get_height(pix);
     pmap = XCreatePixmap(dpy, win, w, h, depth);
@@ -127,7 +71,7 @@ x11_set_bg_pix_real(GdkPixbuf *pix)
 
     win = root;
     depth = x11_get_win_depth(win);
-    if (!depth) 
+    if (!depth)
         return None;
     pmap = x11_create_pmap(win, pix, depth);
     if (pmap == None)
@@ -138,20 +82,7 @@ x11_set_bg_pix_real(GdkPixbuf *pix)
     XFlush(dpy);
 
     return pmap;
-#if 0
-    win = x11_get_desktop_win();
-    if (win == None)
-        return;
-    depth2 = x11_get_win_depth(win);
-    if (!depth)
-        return;
-    if (depth != depth2)
-        pmap = x11_create_pmap(win, pix, depth2);
-    DBG("set bg for win %lx, pmap %lx\n", win, pmap);
-    XSetWindowBackgroundPixmap(dpy, win, pmap);
-    XClearWindow(dpy, win);
-    XFlush(dpy);
-#endif
+
 }
 
 static void
@@ -181,7 +112,7 @@ x11_set_bg_pix(GdkPixbuf *pix)
     DBG("grab ok\n");
     ae = XInternAtom(dpy, "ESETROOT_PMAP_ID", False);
     ax = XInternAtom(dpy, "_XROOTPMAP_ID", False);
-    result = XGetWindowProperty(dpy, root, ae, 
+    result = XGetWindowProperty(dpy, root, ae,
         0L, 1L, False, XA_PIXMAP,
         &type, &format, &nitems, &bytes_after, &data);
 
@@ -274,7 +205,7 @@ pix_create(struct config_t *conf)
     GdkPixbuf *bg, *img;
     GdkScreen *s = gdk_screen_get_default();
     int sw, sh;
-    
+
     if (!s)
         return NULL;
     sw = gdk_screen_get_width(s);
@@ -290,7 +221,7 @@ pix_create(struct config_t *conf)
     DBG("bgimg filled with #%x%x%x color is ready\n", c.red, c.green, c.blue);
     if (!conf->image)
         return bg;
-    
+
     img = gdk_pixbuf_new_from_file(conf->image, &error);
     if (!img) {
         ERR("Can't load %s: %s\n", conf->image, error->message);
@@ -308,7 +239,7 @@ int
 main(int argc, char *argv[])
 {
     GdkPixbuf *pix;
-  
+
     gtk_init(&argc, &argv);
     parse_args(&conf, argc, argv);
     pix = pix_create(&conf);
