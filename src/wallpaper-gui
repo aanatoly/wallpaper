@@ -45,8 +45,8 @@ _init_log()
 desc = '''Wallpaper configurator'''
 p = argparse.ArgumentParser(description=desc)
 p.add_argument("--debug", help="debug mode", action="store_true")
-p.add_argument("--scale", help="scale type: fit, cover or none (default %(default)s)",
-    choices=['fit', 'cover', 'none'], default='cover')
+p.add_argument("--scale", help="scale type: fit, cover or auto (default %(default)s)",
+    choices=['fit', 'cover', 'auto'], default='auto')
 p.add_argument("--color", help="fill color, name or '#RRGGBB' value (default %(default)s)",
     default='#ffd2ac')
 p.add_argument("--saved", help="apply saved configuration (if any) and exit",
@@ -81,9 +81,11 @@ class ThImage(gtk.Image):
         self.color = None
         self.uri = None
         self.idle_id = None
-        self.scale = 'cover'
+        self.scale = 'auto'
+        self.scale_real = None
         self.gravity = 'center'
         self.set_color("#ffd2ac")
+        self.sratio = gtk.gdk.screen_width() / float(gtk.gdk.screen_height())
 
         
     def set_pix(self, uri):
@@ -120,7 +122,7 @@ class ThImage(gtk.Image):
 
     def set_scale(self, scale):
         log.debug("scale %s", scale)
-        if not scale in ['fit', 'cover']:
+        if not scale in ['fit', 'cover', 'auto']:
             log.warning("unsupported scale %s", scale)
             return
         self.scale = scale
@@ -129,7 +131,7 @@ class ThImage(gtk.Image):
 
     def get_conf(self):
         c = {
-            'scale': self.scale,
+            'scale': self.scale_real,
             'color': self.color,
             'image': self.uri,
         }
@@ -171,9 +173,20 @@ class ThImage(gtk.Image):
         hbg = self.pix.get_height()
         wpx = self.ipix.get_width()
         hpx = self.ipix.get_height()
-        if self.scale == 'cover':
+        if self.scale == 'auto':
+            scale_r = wpx / float(hpx)
+            diff = abs(scale_r - self.sratio)
+            log.debug("ipix ratio %.2f, screen ratio %.2f, diff %.2f",
+                scale_r, self.sratio, diff)
+            if diff < 0.55:
+                self.scale_real = 'cover'
+            else:
+                self.scale_real = 'fit'
+        else:
+            self.scale_real = self.scale
+        if self.scale_real == 'cover':
             scale_r = max(float(wbg) / wpx, float(hbg) / hpx)
-        elif self.scale == 'fit':
+        elif self.scale_real == 'fit':
             scale_r = min(float(wbg) / wpx, float(hbg) / hpx)
         else:
             scale_r = 1.0
@@ -314,7 +327,7 @@ def gui_scale_btn():
     label = gtk.Label("Scale")
     hbox.pack_start(label, False)
 
-    scales = ['fit', 'cover']
+    scales = ['fit', 'cover', 'auto']
     liststore = gtk.ListStore(str, str)
     for s in scales:
         liststore.append([s.title(), s])
