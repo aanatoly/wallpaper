@@ -378,7 +378,7 @@ def gui_color_btn():
 
 def gui_run():
     w = gtk.Dialog("Set Wallpaper", None, 0,
-            (gtk.STOCK_CANCEL, gtk.RESPONSE_REJECT,
+            (gtk.STOCK_CLOSE, gtk.RESPONSE_REJECT,
              gtk.STOCK_APPLY, gtk.RESPONSE_ACCEPT))
     # w.get_action_area().set_layout(gtk.BUTTONBOX_CENTER)
     w.set_border_width(10)
