@@ -410,7 +410,7 @@ def gui_run():
     th.connect("drag_data_received", gui_draged_cb)
     frame2.add(th)
 
-    ali = gtk.Alignment(0.5, 0.5, 0, 0)
+    ali = gtk.Alignment(0.5, 0.0, 0, 0)
     w.vbox.pack_start(ali, False, True, 0)
 
     vbox = gtk.VBox(False, 3)
@@ -419,7 +419,7 @@ def gui_run():
     vbox.pack_start(gui_file_btn(), False, True, 0)
     vbox.pack_start(gui_scale_btn(), False, True, 0)
     vbox.pack_start(gui_color_btn(), False, True, 0)
- 
+    vbox.pack_start(gtk.Label(""), True, True, 10)
 
     w.vbox.show_all()
     return w
