@@ -76,6 +76,7 @@ class ThImage(gtk.Image):
     def __init__(self):
         gtk.Image.__init__(self)
         self.connect("expose_event", self._expose)
+        self.connect("size_allocate", self._size_alloc)
         self.pix = None
         self.ipix = None
         self.color = None
