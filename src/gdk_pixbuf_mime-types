@@ -1,7 +1,0 @@
-#!/bin/bash
-
-mimes=( $(gdk-pixbuf-query-loaders | grep image/ | \
-    sed -e 's/"/\n/g' | sort -u) )
-
-IFS=";"
-echo "MimeType=${mimes[*]}"

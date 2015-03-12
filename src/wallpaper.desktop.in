@@ -1,8 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Wallpaper settings
-GenericName=Wallpaper settings
-Comment=Set desktop wallpaper
-Icon=preferences-desktop-wallpaper
-Exec=wallpaper-gui %f
-Categories=Settings;DesktopSettings
