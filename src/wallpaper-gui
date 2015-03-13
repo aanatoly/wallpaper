@@ -446,8 +446,9 @@ def conf_save(c):
 
 def conf_run(c):
     cmd = ['wallpaper']
-    cmd += ['--scale=' + c['scale']]
-    cmd += ['--color=' + c['color']]
+    for opt in ['scale', 'color']:
+        if c[opt]:
+            cmd += ['--' + opt + '=' + c[opt]]
     if c['image']:
         cmd += [c['image']]
     log.debug("cmd %s", cmd)
