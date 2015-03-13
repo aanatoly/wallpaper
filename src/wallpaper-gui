@@ -451,8 +451,21 @@ def conf_run(c):
     if c['image']:
         cmd += [c['image']]
     log.debug("cmd %s", cmd)
-    return sp.call(cmd)
-
+    try:
+        return sp.call(cmd)
+    except OSError as e:
+        msg = "Can't run '%s'\n%s" % (cmd[0], e.strerror)
+        log.error("%s", msg)
+        if 'top' in gui:
+            d = gtk.MessageDialog(gui['top'],
+                    gtk.DIALOG_MODAL | gtk.DIALOG_DESTROY_WITH_PARENT,
+                    gtk.MESSAGE_ERROR,
+                    gtk.BUTTONS_CLOSE,
+                    msg)        
+            d.run()
+            d.destroy()
+        return 1
+    
 
 def args_load():
     c = conf_load()
@@ -477,6 +490,7 @@ if __name__ == '__main__':
         args_load()
   
     w = gui_run()
+    gui['top'] = w
     while w.run() == gtk.RESPONSE_ACCEPT:
         c = gui['th'].get_conf()
         log.debug("conf %s", c)
