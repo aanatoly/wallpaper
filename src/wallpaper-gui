@@ -41,12 +41,20 @@ _init_log()
 ############################################
 # Argument parsing
 ############################################
+scale_types = ['fit', 'cover', 'auto', 'manual']
+gravity_types = ['center']
 
 desc = '''Wallpaper configurator'''
 p = argparse.ArgumentParser(description=desc)
 p.add_argument("--debug", help="debug mode", action="store_true")
-p.add_argument("--scale", help="scale type: fit, cover or auto (default %(default)s)",
-    choices=['fit', 'cover', 'auto'], default='auto')
+p.add_argument("--scale", help="scale type: " + ','.join(scale_types) + \
+               "(default %(default)s)",
+    choices=scale_types, default='auto')
+p.add_argument("--gravity", help="gravity type: " + ','.join(gravity_types) + \
+               "(default %(default)s)",
+    choices=gravity_types, default='center')
+p.add_argument("--scale-r", help="scale ration, default %(default)s",
+               metavar='ratio', default=1.0)
 p.add_argument("--color", help="fill color, name or '#RRGGBB' value (default %(default)s)",
     default='#ffd2ac')
 p.add_argument("--saved", help="apply saved configuration (if any) and exit",
@@ -72,7 +80,93 @@ def die(msg, ret = 1):
 # Thumbnail Image
 ############################################
 
+def get_geom(
+        base_ratio, base_width, base_height,
+        pix_ratio, pix_width, pix_height,
+        scale_type, scale_ratio,
+        gravity):
+    
+    log.debug("ratio: base %s, pix %s", base_ratio, pix_ratio)
+    log.debug("scale: type %s, ratio %s", scale_type, scale_ratio)
+    log.debug("base size %d x %d", base_width, base_height)
+    log.debug("pix size %d x %d", pix_width, pix_height)
+        
+    if scale_type == 'auto':
+        diff = abs(base_ratio - pix_ratio)
+        log.debug("diff ratio %.2f", diff)
+        if diff < 0.55:
+            scale_type_real = 'cover'
+        else:
+            scale_type_real = 'fit'
+    else:
+        scale_type_real = scale_type
+
+    if scale_type_real == 'cover':
+        scale_ratio = max(float(base_width) / pix_width,
+                          float(base_height) / pix_height)
+    elif scale_type_real == 'fit':
+        scale_ratio = min(float(base_width) / pix_width,
+                          float(base_height) / pix_height)
+    elif scale_type_real == 'manual':
+        if scale_ratio <= 0.0:
+            scale_ratio = 0.05
+    else:
+        scale_ratio = 0.2
+
+
+    log.debug("scale: type %s, ratio %.2f", scale_type_real, scale_ratio)
+    dest_width  = max(10, pix_width * scale_ratio)
+    dest_height = max(10, pix_height * scale_ratio)
+    if scale_type_real == 'manual':
+        while True:
+            log.debug("dest size %s x %s", dest_width, dest_height)
+
+            if dest_width < 3000 and dest_height < 3000:
+                break
+            scale_ratio -= 0.05
+            if scale_ratio <= 0:
+                break
+            dest_width  = max(10, pix_width * scale_ratio)
+            dest_height = max(10, pix_height * scale_ratio)
+                
+    if scale_ratio <= 0.0:
+        scale_ratio = 0.05
+
+    dest_x = 0
+    dest_y = 0
+    offset_x = 0.0
+    offset_y = 0.0
+    
+    if gravity == 'center':
+        offset_x = (base_width - dest_width) / 2
+        offset_y = (base_height - dest_height) / 2
+
+        if offset_x > 0:
+            dest_x = offset_x
+        if offset_y > 0:
+            dest_y = offset_y
+
+    log.debug("offset %+d%+d", int(offset_x), int(offset_y))
+    if dest_width > base_width:
+        dest_width = base_width
+    if dest_height > base_height:
+        dest_height = base_height
+    log.debug("dest geom=%dx%d pos=%dx%d",
+        dest_width, dest_height, dest_x, dest_y)
+
+    dest_x = int(dest_x)
+    dest_y = int(dest_y)
+    dest_width = int(dest_width)
+    dest_height = int(dest_height)
+    offset_x = int(offset_x)
+    offset_y = int(offset_y)
+    return (dest_x, dest_y, dest_width, dest_height,
+            offset_x, offset_y, scale_type_real, scale_ratio)
+
+
+        
 class ThImage(gtk.Image):
+  
     def __init__(self):
         gtk.Image.__init__(self)
         self.connect("expose_event", self._expose)
@@ -84,6 +178,7 @@ class ThImage(gtk.Image):
         self.idle_id = None
         self.scale = 'auto'
         self.scale_real = None
+        self.scale_r = 1.0
         self.gravity = 'center'
         self.set_color("#ffd2ac")
         self.sratio = gtk.gdk.screen_width() / float(gtk.gdk.screen_height())
@@ -119,22 +214,46 @@ class ThImage(gtk.Image):
         self.color = str(color)
         self.rgba = self._color_to_rgba(self.color)
         self._update_pix()
-        
 
-    def set_scale(self, scale):
+        
+    def set_gravity_type(self, gravity):
+        log.debug("gravity %s", gravity)
+        if not gravity in gravity_types:
+            log.warning("unsupported gravity %s", gravity)
+            return
+        self.gravity = gravity
+        self._update_pix()
+
+        
+   
+    def set_scale_type(self, scale):
         log.debug("scale %s", scale)
-        if not scale in ['fit', 'cover', 'auto']:
+        if not scale in scale_types:
             log.warning("unsupported scale %s", scale)
             return
         self.scale = scale
         self._update_pix()
 
+        
+    def set_scale_ratio(self, scale_r):
+        log.debug("scale ratio %s", scale_r)
+        if self.scale == 'manual':
+            log.debug("accepted")
+            self.scale_r = scale_r
+        self._update_pix()
 
+        
+    def get_scale_ratio(self):
+        return self.scale_r
+    
+        
     def get_conf(self):
         c = {
             'scale': self.scale_real,
+            'scale_r': self.scale_r,
             'color': self.color,
             'image': self.uri,
+            'gravity': self.gravity,
         }
         return c
     
@@ -169,11 +288,29 @@ class ThImage(gtk.Image):
 
 
     def _compose_ipix(self):
-        log.debug("")
+        pw = self.ipix.get_width()
+        ph = self.ipix.get_height()
+        pr = 1.0 * pw / ph
+        t = get_geom(self.sratio, self.pix.get_width(), self.pix.get_height(),
+                     pr, pw, ph,
+                     self.scale, self.scale_r, self.gravity)
+        dest_x, dest_y, dest_width, dest_height, offset_x, \
+            offset_y, self.scale_real, self.scale_r = t
+        self.ipix.composite(self.pix,
+            dest_x, dest_y, dest_width, dest_height,
+            offset_x, offset_y, self.scale_r, self.scale_r,
+            gtk.gdk.INTERP_HYPER, 255)
+
+    
+    def _compose_ipix_old(self):
+        log.debug("start scale: type %s, ratio %s", self.scale, self.scale_r)
         wbg = self.pix.get_width()
         hbg = self.pix.get_height()
+        log.debug("bg size %d x %d", wbg, hbg)
         wpx = self.ipix.get_width()
         hpx = self.ipix.get_height()
+        log.debug("ipix size %d x %d", wpx, hpx)
+        
         if self.scale == 'auto':
             scale_r = wpx / float(hpx)
             diff = abs(scale_r - self.sratio)
@@ -185,15 +322,34 @@ class ThImage(gtk.Image):
                 self.scale_real = 'fit'
         else:
             self.scale_real = self.scale
+
         if self.scale_real == 'cover':
-            scale_r = max(float(wbg) / wpx, float(hbg) / hpx)
+            self.scale_r = max(float(wbg) / wpx, float(hbg) / hpx)
         elif self.scale_real == 'fit':
-            scale_r = min(float(wbg) / wpx, float(hbg) / hpx)
+            self.scale_r = min(float(wbg) / wpx, float(hbg) / hpx)
+        elif self.scale_real == 'manual':
+            if self.scale_r <= 0.0:
+                self.scale_r = 0.05
         else:
-            scale_r = 1.0
-        log.debug("scale %s, %.2f", self.scale, scale_r)
-        dest_width  = wpx * scale_r
-        dest_height = hpx * scale_r
+            self.scale_r = 0.2
+        log.debug("scale: type %s, ratio %.2f", self.scale_real, self.scale_r)
+        dest_width  = max(10, wpx * self.scale_r)
+        dest_height = max(10, hpx * self.scale_r)
+        if self.scale_real == 'manual':
+            while True:
+                log.debug("dest size %s x %s", dest_width, dest_height)
+
+                if dest_width < 3000 and dest_height < 3000:
+                    break
+                self.scale_r -= 0.05
+                if self.scale_r <= 0:
+                    break
+                dest_width  = max(10, wpx * self.scale_r)
+                dest_height = max(10, hpx * self.scale_r)
+                
+        if self.scale_r <= 0:
+            self.scale_r = 0.05
+
         dest_x = 0
         dest_y = 0
         offset_x = 0.0
@@ -224,7 +380,7 @@ class ThImage(gtk.Image):
         offset_y = int(offset_y)
         self.ipix.composite(self.pix,
             dest_x, dest_y, dest_width, dest_height,
-            offset_x, offset_y, scale_r, scale_r,
+            offset_x, offset_y, self.scale_r, self.scale_r,
             gtk.gdk.INTERP_HYPER, 255)
 
 
@@ -280,18 +436,13 @@ def gui_file_unset_cb(cbtn, btn):
     
 def gui_file_btn():
     hbox = gtk.HBox(False, 3)
-
-    label = gtk.Label("Image")
-    hbox.pack_start(label, False)
-
+ 
     btn = gtk.FileChooserButton('Select a File')
     gui['image'] = btn
     hbox.pack_start(btn, False)
     btn.connect("file-set", gui_file_set_cb)
     btn.set_width_chars(20)
-    if args.image:
-        btn.set_filename(args.image)
-        gui_file_set_cb(btn)
+  
 
     f = gtk.FileFilter()
     f.set_name("Images")
@@ -309,47 +460,123 @@ def gui_file_btn():
     img = gtk.Image()
     cbtn.add(img)
     img.set_from_stock(gtk.STOCK_CLEAR, gtk.ICON_SIZE_MENU)
-    
+    log.debug("file btn ready")
     hbox.show_all()
     return hbox
 
 
-def gui_scale_set_cb(cb):
+def gui_scale_type_set_cb(cb):
     model = cb.get_model()
     index = cb.get_active()
     scale = model[index][1]
-    log.debug("scale set %s", scale)
-    gui['th'].set_scale(scale)
+    log.debug("set scale type %s", scale)
+    gui['th'].set_scale_type(scale)
+    for w in gui['scale_value']:
+        w.set_sensitive(scale == 'manual')
     
 
-def gui_scale_btn():
-    hbox = gtk.HBox(False, 3)
+def gui_scale_ratio_set_cb(sb):
+    value = sb.get_value()
+    log.debug("set scale ratio %s", value)
+    gui['th'].set_scale_ratio(value)
+    glib.idle_add(gui_update_scale_ratio, sb)
 
-    label = gtk.Label("Scale")
-    hbox.pack_start(label, False)
 
-    scales = ['fit', 'cover', 'auto']
+def gui_update_scale_ratio(sb):
+    value = sb.get_value()
+    nvalue = gui['th'].get_scale_ratio()
+    log.debug("cur value %s", nvalue)
+    if value != nvalue:
+        log.debug("update buton value %s, with real value %s",
+                  value, nvalue)
+        sb.set_value(nvalue)
+             
+    
+def gui_scale_type_btn():
+    log.debug("enter")
+
+    # scales = ['fit', 'cover', 'auto', 'manual']
+    scales = scale_types
     liststore = gtk.ListStore(str, str)
     for s in scales:
         liststore.append([s.title(), s])
 
     combobox = gtk.ComboBox(liststore)
     gui['scale'] = combobox
-    hbox.pack_start(combobox, False)
     try:
         ae = scales.index(args.scale)
     except:
         ae = 0
     combobox.set_active(ae)
-    gui_scale_set_cb(combobox)
+    # gui_scale_set_cb(combobox)
     
     cell = gtk.CellRendererText()
     combobox.pack_start(cell, True)
     combobox.add_attribute(cell, 'text', 0)
-    combobox.connect('changed', gui_scale_set_cb)
+    combobox.connect('changed', gui_scale_type_set_cb)
+
+    return combobox
+
+
+def gui_scale_ratio_btn():
+    hbox = gtk.HBox(False, 5)
+  
+    a = gtk.Adjustment(value=0.2, lower=0.05, upper=20.0,
+                       step_incr=0.01)
+    sb = gtk.SpinButton(adjustment=a, climb_rate=0.0, digits=2)
+    gui['scale_r'] = sb
+    hbox.pack_start(sb, False)
+    log.debug("scale ratio btn is ready")
+    sb.connect("value-changed", gui_scale_ratio_set_cb)
     
     hbox.show_all()
     return hbox
+
+
+def gui_scale_btn():
+    log.debug("enter")
+    hbox = gtk.HBox(False, 20)
+
+    hbox.pack_start(gui_scale_type_btn(), False)
+    hbox.pack_start(gui_scale_ratio_btn(), False)
+    
+    hbox.show_all()
+    return hbox
+
+def gui_gravity_set_cb(cb):
+    model = cb.get_model()
+    index = cb.get_active()
+    gravity = model[index][1]
+    log.debug("set gravity type %s", gravity)
+    gui['th'].set_gravity_type(gravity)
+    # gui['gravity_r'].set_sensitive(gravity == 'manual')
+    
+
+
+def gui_gravity_btn():
+    log.debug("enter")
+  
+    # gravitys = ['fit', 'cover', 'auto', 'manual']
+    gravitys = gravity_types
+    liststore = gtk.ListStore(str, str)
+    for s in gravitys:
+        liststore.append([s.title(), s])
+
+    combobox = gtk.ComboBox(liststore)
+    gui['gravity'] = combobox
+    try:
+        ae = gravitys.index(args.gravity)
+    except:
+        ae = 0
+    combobox.set_active(ae)
+    # gui_gravity_set_cb(combobox)
+    
+    cell = gtk.CellRendererText()
+    combobox.pack_start(cell, True)
+    combobox.add_attribute(cell, 'text', 0)
+    combobox.connect('changed', gui_gravity_set_cb)
+
+    return combobox
 
 
 def gui_color_set_cb(btn):
@@ -359,25 +586,18 @@ def gui_color_set_cb(btn):
     
 
 def gui_color_btn():
-    hbox = gtk.HBox(False, 3)
-
-    label = gtk.Label("Color")
-    hbox.pack_start(label, False)
     
     c = gtk.gdk.color_parse(args.color)
     btn = gtk.ColorButton(c)
     gui['color'] = btn
-    hbox.pack_start(btn, False)
     btn.connect("color-set", gui_color_set_cb)
     gui['th'].set_color(c)
     
-    hbox.show_all()
-    return hbox
-
-
+    return btn
 
 
 def gui_run():
+    log.debug("enter")
     w = gtk.Dialog("Set Wallpaper", None, 0,
             (gtk.STOCK_CLOSE, gtk.RESPONSE_REJECT,
              gtk.STOCK_APPLY, gtk.RESPONSE_ACCEPT))
@@ -413,15 +633,86 @@ def gui_run():
     ali = gtk.Alignment(0.5, 0.0, 0, 0)
     w.vbox.pack_start(ali, False, True, 0)
 
-    vbox = gtk.VBox(False, 3)
+    vbox = gtk.Table(4, 4)
+    vbox.set_col_spacing(0, 10)
+    vbox.set_col_spacing(2, 10)
     ali.add(vbox)
 
-    vbox.pack_start(gui_file_btn(), False, True, 0)
-    vbox.pack_start(gui_scale_btn(), False, True, 0)
-    vbox.pack_start(gui_color_btn(), False, True, 0)
-    vbox.pack_start(gtk.Label(""), True, True, 10)
+    def get_label(text):
+        label = gtk.Label(text)
+        label.set_alignment(1.0, 0.5)
+        return label
+
+    def get_widget(child):
+        a = gtk.Alignment(0.0, 0.5, 0, 0)
+        a.add(child)
+        return a
+
+    row = 0
+    label = get_label("Image")
+    vbox.attach(label, 0, 1, row, row + 1)
+    widget = get_widget(gui_file_btn())
+    vbox.attach(widget, 1, 4, row, row + 1)
+
+    row += 1
+    label = get_label("Color")
+    vbox.attach(label, 0, 1, row, row + 1)
+    widget = get_widget(gui_color_btn())
+    vbox.attach(widget, 1, 2, row, row + 1)
+
+    row += 1
+    label = get_label("Scale")
+    vbox.attach(label, 0, 1, row, row + 1)
+    widget = get_widget(gui_scale_type_btn())
+    vbox.attach(widget, 1, 2, row, row + 1)
+
+    # label = get_label("Value")
+    # vbox.attach(label, 0, 1, 2, 3)
+    #             # 0, gtk.EXPAND|gtk.FILL)
+    # widget = get_widget(gui_scale_ratio_btn())
+    # vbox.attach(widget, 1, 2, 2, 3)
+
+    label = get_label("Value")
+    vbox.attach(label, 2, 3, row, row + 1)
+                # 0, gtk.EXPAND|gtk.FILL)
+    widget = get_widget(gui_scale_ratio_btn())
+    vbox.attach(widget, 3, 4, row, row + 1)
+    gui['scale_value'] = [label, widget]
+    
+    row += 1
+    label = get_label("Gravity")
+    vbox.attach(label, 0, 1, row, row + 1)
+    widget = get_widget(gui_gravity_btn())
+    vbox.attach(widget, 1, 2, row, row + 1)
 
     w.vbox.show_all()
+    log.debug("========= init =========")
+    if args.image:
+        log.debug("set image %s", args.image)
+        gui['image'].set_filename(args.image)
+        gui_file_set_cb(gui['image'])
+
+    
+    log.debug("set scale type %s", args.scale)
+    gui['scale'].set_active(scale_types.index(args.scale))
+    gui_scale_type_set_cb(gui['scale'])
+
+    log.debug("set scale ratio %s", args.scale_r)
+    gui['scale_r'].set_value(args.scale_r)
+    gui_scale_ratio_set_cb(gui['scale_r'])
+
+    # vbox.pack_start(gui_file_btn(), False, True, 0)
+    # vbox.pack_start(gui_scale_btn(), False, True, 0)
+    # vbox.pack_start(gui_gravity_btn(), False, True, 0)
+    # vbox.pack_start(gui_color_btn(), False, True, 0)
+    # vbox.pack_start(gtk.Label(""), True, True, 10)
+
+    w.vbox.show_all()
+    # gui['th'].set_pix(args.image)
+    gui['th'].set_color(args.color)
+    # gui['th'].set_scale_type(args.scale)
+    gui['th'].set_scale_ratio(args.scale_r)
+    gui['th'].set_gravity_type(args.gravity)
     return w
    
 
@@ -472,6 +763,24 @@ def args_load():
     c = conf_load()
     for k in c:
         setattr(args, k, c[k])
+
+    # sanity check
+    if type(args.scale) == unicode:
+        args.scale = str(args.scale)
+    log.debug("type of scale %s", type(args.scale))
+    if type(args.scale) != str or args.scale not in scale_types:
+        log.warning("wrong scale type '%s' in conf", args.scale)
+        args.scale = 'auto'
+
+
+    if type(args.gravity) == unicode:
+        args.gravity = str(args.gravity)
+    log.debug("type of gravity %s", type(args.gravity))
+    if type(args.gravity) != str or args.gravity not in gravity_types:
+        log.warning("wrong gravity type '%s' in conf", args.gravity)
+        args.gravity = 'center'
+
+        
     log.debug("loaded args %s", args)
 
 
