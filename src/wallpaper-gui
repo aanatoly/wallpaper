@@ -42,7 +42,7 @@ _init_log()
 # Argument parsing
 ############################################
 scale_types = ['fit', 'cover', 'auto', 'manual']
-gravity_types = ['center']
+gravity_types = ['center', 'north', 'east', 'south', 'west']
 
 desc = '''Wallpaper configurator'''
 p = argparse.ArgumentParser(description=desc)
@@ -55,6 +55,8 @@ p.add_argument("--gravity", help="gravity type: " + ','.join(gravity_types) + \
     choices=gravity_types, default='center')
 p.add_argument("--scale-r", help="scale ration, default %(default)s",
                metavar='ratio', default=1.0)
+p.add_argument("--offset", help="offset, default %(default)s",
+               metavar='ratio', type=int, default=0)
 p.add_argument("--color", help="fill color, name or '#RRGGBB' value (default %(default)s)",
     default='#ffd2ac')
 p.add_argument("--saved", help="apply saved configuration (if any) and exit",
@@ -82,17 +84,20 @@ def die(msg, ret = 1):
 
 def get_geom(
         base_ratio, base_width, base_height,
-        pix_ratio, pix_width, pix_height,
+        ovr_ratio, ovr_width, ovr_height,
         scale_type, scale_ratio,
-        gravity):
-    
-    log.debug("ratio: base %s, pix %s", base_ratio, pix_ratio)
+        gravity, offset):
+
+    log.debug("==[ Params ]==")
+    log.debug("ratio: base %s, pix %s", base_ratio, ovr_ratio)
     log.debug("scale: type %s, ratio %s", scale_type, scale_ratio)
-    log.debug("base size %d x %d", base_width, base_height)
-    log.debug("pix size %d x %d", pix_width, pix_height)
+    log.debug("base: size %d x %d", base_width, base_height)
+    log.debug("pix: size %d x %d", ovr_width, ovr_height)
+    log.debug("gravity:  %s", gravity)
+    log.debug("offset:  %s", offset)
         
     if scale_type == 'auto':
-        diff = abs(base_ratio - pix_ratio)
+        diff = abs(base_ratio - ovr_ratio)
         log.debug("diff ratio %.2f", diff)
         if diff < 0.55:
             scale_type_real = 'cover'
@@ -102,11 +107,11 @@ def get_geom(
         scale_type_real = scale_type
 
     if scale_type_real == 'cover':
-        scale_ratio = max(float(base_width) / pix_width,
-                          float(base_height) / pix_height)
+        scale_ratio = max(float(base_width) / ovr_width,
+                          float(base_height) / ovr_height)
     elif scale_type_real == 'fit':
-        scale_ratio = min(float(base_width) / pix_width,
-                          float(base_height) / pix_height)
+        scale_ratio = min(float(base_width) / ovr_width,
+                          float(base_height) / ovr_height)
     elif scale_type_real == 'manual':
         if scale_ratio <= 0.0:
             scale_ratio = 0.05
@@ -115,8 +120,8 @@ def get_geom(
 
 
     log.debug("scale: type %s, ratio %.2f", scale_type_real, scale_ratio)
-    dest_width  = max(10, pix_width * scale_ratio)
-    dest_height = max(10, pix_height * scale_ratio)
+    dest_width  = max(10, ovr_width * scale_ratio)
+    dest_height = max(10, ovr_height * scale_ratio)
     if scale_type_real == 'manual':
         while True:
             log.debug("dest size %s x %s", dest_width, dest_height)
@@ -126,27 +131,64 @@ def get_geom(
             scale_ratio -= 0.05
             if scale_ratio <= 0:
                 break
-            dest_width  = max(10, pix_width * scale_ratio)
-            dest_height = max(10, pix_height * scale_ratio)
+            dest_width  = max(10, ovr_width * scale_ratio)
+            dest_height = max(10, ovr_height * scale_ratio)
                 
     if scale_ratio <= 0.0:
         scale_ratio = 0.05
-
+    log.debug("dest size: %d x %d", dest_width, dest_height)
     dest_x = 0
     dest_y = 0
-    offset_x = 0.0
-    offset_y = 0.0
+    offset_x = (base_width - dest_width) / 2
+    offset_y = (base_height - dest_height) / 2
+    log.debug("offset %d %d", offset_x, offset_y)
+
+    if scale_type_real in ['fit', 'cover']:
+        gravity = 'center'
+    log.debug("final gravity %s", gravity)
+
+    if scale_type_real != 'manual' or gravity == 'center':
+        offset = 0
+    log.debug("final offset %s", offset)
     
     if gravity == 'center':
-        offset_x = (base_width - dest_width) / 2
-        offset_y = (base_height - dest_height) / 2
-
         if offset_x > 0:
             dest_x = offset_x
         if offset_y > 0:
             dest_y = offset_y
 
-    log.debug("offset %+d%+d", int(offset_x), int(offset_y))
+    elif gravity == 'north':
+        if offset_x > 0:
+            dest_x = offset_x
+        dest_y = offset
+        offset_y = offset
+
+    elif gravity == 'south':
+        if offset_x > 0:
+            dest_x = offset_x
+        if offset_y > 0:
+            offset_y = offset_y * 2 - offset
+            dest_y = offset_y
+      
+    elif gravity == 'west':
+        if offset_y > 0:
+            dest_y = offset_y
+        dest_x = offset
+        offset_x = offset
+        
+  
+    elif gravity == 'east':
+        if offset_y > 0:
+            dest_y = offset_y
+        if offset_x > 0:
+            offset_x = offset_x * 2 - offset    
+            dest_x = offset_x
+      
+
+        
+            
+    log.debug("dest pos %+d %+d", dest_x, dest_y)
+    log.debug("offset %+d %+d", int(offset_x), int(offset_y))
     if dest_width > base_width:
         dest_width = base_width
     if dest_height > base_height:
@@ -160,9 +202,49 @@ def get_geom(
     dest_height = int(dest_height)
     offset_x = int(offset_x)
     offset_y = int(offset_y)
+    log.debug("dest: %d,%d %d x%d", dest_x, dest_y, dest_width, dest_height)
+    log.debug("offset: %d,%d, scale: type %s, ratio %s",
+              offset_x, offset_y, scale_type_real, scale_ratio)
     return (dest_x, dest_y, dest_width, dest_height,
             offset_x, offset_y, scale_type_real, scale_ratio)
 
+
+def paint_base__pix(base_pix, rgba, ovr_pix,
+                scale, scale_ratio, gravity, offset):
+
+    log.debug("params: base_pix %s, rgba %x, ovr_pix %s",
+              base_pix, rgba, ovr_pix)
+    log.debug("params: scale %s, ratio %s, gravity %s, offset %s",
+              scale, scale_ratio, gravity, offset)
+    base_pix.fill(rgba)
+    if not ovr_pix:
+        return
+    
+    base_width = base_pix.get_width()
+    base_height = base_pix.get_height()
+    base_ratio = 1.0 * base_width / base_height
+
+    ovr_width = ovr_pix.get_width()
+    ovr_height = ovr_pix.get_height()
+    ovr_ration = 1.0 * ovr_width / ovr_height
+
+    t = get_geom(base_ratio, base_width, base_height,
+                 ovr_ration, ovr_width, ovr_height,
+                 scale, scale_ratio, gravity, offset)
+    dest_x, dest_y, dest_width, dest_height, offset_x, \
+        offset_y, scale_real, scale_ratio = t
+    ovr_pix.composite(base_pix,
+                      dest_x, dest_y, dest_width, dest_height,
+                      offset_x, offset_y, scale_ratio, scale_ratio,
+                      gtk.gdk.INTERP_HYPER, 255)
+
+    
+def color_to_rgba(color):
+    c = gtk.gdk.color_parse(color)
+    rgba = ((c.red >> 8) << 24) | ((c.green >> 8) << 16) | ((c.blue >> 8) << 8)
+    # rgba = 0xffd2ac00
+    log.debug("rgba %x", rgba)
+    return rgba
 
         
 class ThImage(gtk.Image):
@@ -179,7 +261,9 @@ class ThImage(gtk.Image):
         self.scale = 'auto'
         self.scale_real = None
         self.scale_r = 1.0
+        self.scale_factor = 0.5
         self.gravity = 'center'
+        self.offset = 0
         self.set_color("#ffd2ac")
         self.sratio = gtk.gdk.screen_width() / float(gtk.gdk.screen_height())
 
@@ -212,7 +296,7 @@ class ThImage(gtk.Image):
     def set_color(self, color):
         log.debug("color %s", color)
         self.color = str(color)
-        self.rgba = self._color_to_rgba(self.color)
+        self.rgba = color_to_rgba(self.color)
         self._update_pix()
 
         
@@ -225,7 +309,20 @@ class ThImage(gtk.Image):
         self._update_pix()
 
         
-   
+    def set_offset(self, offset):
+        log.debug("offset %s", offset)
+        self.offset = offset
+        self._update_pix()
+
+        
+    def get_offset(self):
+        return self.offset
+    
+
+    def get_scale_type(self):
+        return self.scale
+
+    
     def set_scale_type(self, scale):
         log.debug("scale %s", scale)
         if not scale in scale_types:
@@ -249,11 +346,12 @@ class ThImage(gtk.Image):
         
     def get_conf(self):
         c = {
-            'scale': self.scale_real,
+            'scale': self.scale,
             'scale_r': self.scale_r,
             'color': self.color,
             'image': self.uri,
             'gravity': self.gravity,
+            'offset': self.offset,
         }
         return c
     
@@ -267,7 +365,8 @@ class ThImage(gtk.Image):
 
 
     def _size_alloc(self, widget, a):
-        log.debug("%s, ratio %f", a, float(a.width) / a.height)
+        self.scale_factor = float(a.width) / gtk.gdk.screen_width()
+        log.debug("alloc %s, scale factor %s", a, self.scale_factor)
         self.pix = None
         self._update_pix()
 
@@ -278,123 +377,34 @@ class ThImage(gtk.Image):
             return
         self.idle_id = glib.idle_add(self._update_pix_real)
 
-
-    def _color_to_rgba(self, color):
-        c = gtk.gdk.color_parse(color)
-        rgba = ((c.red >> 8) << 24) | ((c.green >> 8) << 16) | ((c.blue >> 8) << 8)
-        # rgba = 0xffd2ac00
-        log.debug("rgba %x", rgba)
-        return rgba
-
-
-    def _compose_ipix(self):
-        pw = self.ipix.get_width()
-        ph = self.ipix.get_height()
-        pr = 1.0 * pw / ph
-        t = get_geom(self.sratio, self.pix.get_width(), self.pix.get_height(),
-                     pr, pw, ph,
-                     self.scale, self.scale_r, self.gravity)
-        dest_x, dest_y, dest_width, dest_height, offset_x, \
-            offset_y, self.scale_real, self.scale_r = t
-        self.ipix.composite(self.pix,
-            dest_x, dest_y, dest_width, dest_height,
-            offset_x, offset_y, self.scale_r, self.scale_r,
-            gtk.gdk.INTERP_HYPER, 255)
-
-    
-    def _compose_ipix_old(self):
-        log.debug("start scale: type %s, ratio %s", self.scale, self.scale_r)
-        wbg = self.pix.get_width()
-        hbg = self.pix.get_height()
-        log.debug("bg size %d x %d", wbg, hbg)
-        wpx = self.ipix.get_width()
-        hpx = self.ipix.get_height()
-        log.debug("ipix size %d x %d", wpx, hpx)
         
-        if self.scale == 'auto':
-            scale_r = wpx / float(hpx)
-            diff = abs(scale_r - self.sratio)
-            log.debug("ipix ratio %.2f, screen ratio %.2f, diff %.2f",
-                scale_r, self.sratio, diff)
-            if diff < 0.55:
-                self.scale_real = 'cover'
-            else:
-                self.scale_real = 'fit'
-        else:
-            self.scale_real = self.scale
-
-        if self.scale_real == 'cover':
-            self.scale_r = max(float(wbg) / wpx, float(hbg) / hpx)
-        elif self.scale_real == 'fit':
-            self.scale_r = min(float(wbg) / wpx, float(hbg) / hpx)
-        elif self.scale_real == 'manual':
-            if self.scale_r <= 0.0:
-                self.scale_r = 0.05
-        else:
-            self.scale_r = 0.2
-        log.debug("scale: type %s, ratio %.2f", self.scale_real, self.scale_r)
-        dest_width  = max(10, wpx * self.scale_r)
-        dest_height = max(10, hpx * self.scale_r)
-        if self.scale_real == 'manual':
-            while True:
-                log.debug("dest size %s x %s", dest_width, dest_height)
-
-                if dest_width < 3000 and dest_height < 3000:
-                    break
-                self.scale_r -= 0.05
-                if self.scale_r <= 0:
-                    break
-                dest_width  = max(10, wpx * self.scale_r)
-                dest_height = max(10, hpx * self.scale_r)
-                
-        if self.scale_r <= 0:
-            self.scale_r = 0.05
-
-        dest_x = 0
-        dest_y = 0
-        offset_x = 0.0
-        offset_y = 0.0
-
-        if self.gravity == 'center':
-            offset_x = (wbg - dest_width) / 2
-            offset_y = (hbg - dest_height) / 2
-
-            if offset_x > 0:
-                dest_x = offset_x
-            if offset_y > 0:
-                dest_y = offset_y
-
-        log.debug("offset %+d%+d", int(offset_x), int(offset_y))
-        if dest_width > wbg:
-            dest_width = wbg
-        if dest_height > hbg:
-            dest_height = hbg
-        log.debug("dest geom=%dx%d pos=%dx%d",
-            dest_width, dest_height, dest_x, dest_y)
-     
-        dest_x = int(dest_x)
-        dest_y = int(dest_y)
-        dest_width = int(dest_width)
-        dest_height = int(dest_height)
-        offset_x = int(offset_x)
-        offset_y = int(offset_y)
-        self.ipix.composite(self.pix,
-            dest_x, dest_y, dest_width, dest_height,
-            offset_x, offset_y, self.scale_r, self.scale_r,
-            gtk.gdk.INTERP_HYPER, 255)
-
-
     def _update_pix_real(self):
         a = self.get_allocation()
         log.debug("a %s", a)
         self.pix = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False,
             8, a.width, a.height)
-        self.pix.fill(self.rgba)
-        if self.ipix:
-            self._compose_ipix()
+        paint_base__pix(self.pix, self.rgba, self.ipix,
+                        self.scale, self.scale_r * self.scale_factor,
+                        self.gravity, self.offset * self.scale_factor)
+
         self.queue_draw()
         self.idle_id = None
         return False
+
+
+    def apply_conf(self):
+        log.debug("======= apply conf =====")
+        bw = gtk.gdk.screen_width()
+        bh = gtk.gdk.screen_height()
+        base_pix = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False, 8, bw, bh)
+        paint_base__pix(base_pix, self.rgba, self.ipix,
+                        self.scale, self.scale_r, self.gravity, self.offset)
+
+
+        return base_pix
+        
+        
+
 
 ############################################
 # GUI
@@ -471,27 +481,22 @@ def gui_scale_type_set_cb(cb):
     scale = model[index][1]
     log.debug("set scale type %s", scale)
     gui['th'].set_scale_type(scale)
-    for w in gui['scale_value']:
-        w.set_sensitive(scale == 'manual')
+    glib.idle_add(gui_update_all)
+    # for w in gui['scale_ratio_widgets']:
+    #     w.set_sensitive(scale == 'manual')
+    # for w in gui['gravity_widgets']:
+    #     w.set_sensitive(scale == 'manual')
+    # for w in gui['offset_widgets']:
+    #     w.set_sensitive(scale == 'manual')
     
 
 def gui_scale_ratio_set_cb(sb):
     value = sb.get_value()
     log.debug("set scale ratio %s", value)
     gui['th'].set_scale_ratio(value)
-    glib.idle_add(gui_update_scale_ratio, sb)
+    glib.idle_add(gui_update_all)
 
 
-def gui_update_scale_ratio(sb):
-    value = sb.get_value()
-    nvalue = gui['th'].get_scale_ratio()
-    log.debug("cur value %s", nvalue)
-    if value != nvalue:
-        log.debug("update buton value %s, with real value %s",
-                  value, nvalue)
-        sb.set_value(nvalue)
-             
-    
 def gui_scale_type_btn():
     log.debug("enter")
 
@@ -549,9 +554,13 @@ def gui_gravity_set_cb(cb):
     gravity = model[index][1]
     log.debug("set gravity type %s", gravity)
     gui['th'].set_gravity_type(gravity)
-    # gui['gravity_r'].set_sensitive(gravity == 'manual')
-    
+    glib.idle_add(gui_update_all)
 
+    # gui['gravity'].set_sensitive(gravity == 'manual')
+    # for w in gui['offset_widgets']:
+    #     w.set_sensitive(gravity != 'center')
+    
+    
 
 def gui_gravity_btn():
     log.debug("enter")
@@ -579,6 +588,24 @@ def gui_gravity_btn():
     return combobox
 
 
+
+def gui_offset_set_cb(sb):
+    value = sb.get_value()
+    log.debug("set scale ratio %s", value)
+    gui['th'].set_offset(value)
+    glib.idle_add(gui_update_all)
+
+
+def gui_offset_btn():
+    a = gtk.Adjustment(value=0.0, lower=0.0, upper=320.0,
+                       step_incr=2.0)
+    sb = gtk.SpinButton(adjustment=a, climb_rate=0.0, digits=0)
+    gui['offset'] = sb
+    sb.connect("value-changed", gui_offset_set_cb)
+    
+    sb.show_all()
+    return sb
+
 def gui_color_set_cb(btn):
     c = btn.get_color()
     log.debug("set color %s", c)
@@ -595,6 +622,60 @@ def gui_color_btn():
     
     return btn
 
+        
+def gui_update_all():
+    c = gui['th'].get_conf()
+    log.debug("cur conf %s", json.dumps(c, indent=4))
+
+    scale = gui['th'].get_scale_type()
+    cb = gui['scale']
+    model = cb.get_model()
+    index = cb.get_active()
+    value = model[index][1]
+    log.debug("scale type: th %s, gui %s", scale, value)
+    if value != scale:
+        log.debug("update scale type to  %s", scale)
+        cb.set_active(scale_types.index(scale))
+        # gui_scale_type_set_cb(cb)
+    state = (value == 'manual')
+    for w in gui['scale_ratio_widgets']:
+        w.set_sensitive(state)
+    for w in gui['gravity_widgets']:
+        w.set_sensitive(state)
+        
+
+    sb = gui['scale_r']
+    value = sb.get_value()
+    log.debug("scale ratio: cur %s", value)
+    if value != c['scale_r']:
+        log.debug("update scale ratio to  %s", c['scale_r'])
+        sb.set_value(value)
+        # gui_scale_ratio_set_cb(sb)
+
+    cb = gui['gravity']
+    model = cb.get_model()
+    index = cb.get_active()
+    value = model[index][1]
+    log.debug("gravity: cur %s", value)
+    if value != c['gravity']:
+        log.debug("update gravity type to  %s", c['gravity'])
+        cb.set_active(gravity_types.index(c['gravity']))
+        # gui_gravity_type_set_cb(cb)
+    log.debug("gravity sensitivuty %s", cb.is_sensitive())
+    state = cb.is_sensitive() and value != 'center'
+    for w in gui['offset_widgets']:
+        w.set_sensitive(state)
+        
+        
+    sb = gui['offset']
+    value = sb.get_value()
+    log.debug("offset: cur %s", value)
+    if value != c['offset']:
+        log.debug("update offset to  %s", c['offset'])
+        sb.set_value(value)
+        # gui_offsetatio_set_cb(sb)
+
+        
 
 def gui_run():
     log.debug("enter")
@@ -677,14 +758,21 @@ def gui_run():
                 # 0, gtk.EXPAND|gtk.FILL)
     widget = get_widget(gui_scale_ratio_btn())
     vbox.attach(widget, 3, 4, row, row + 1)
-    gui['scale_value'] = [label, widget]
+    gui['scale_ratio_widgets'] = [label, widget]
     
     row += 1
     label = get_label("Gravity")
     vbox.attach(label, 0, 1, row, row + 1)
     widget = get_widget(gui_gravity_btn())
     vbox.attach(widget, 1, 2, row, row + 1)
-
+    gui['gravity_widgets'] = [label, widget]
+    
+    label = get_label("Offset")
+    vbox.attach(label, 2, 3, row, row + 1)
+    widget = get_widget(gui_offset_btn())
+    vbox.attach(widget, 3, 4, row, row + 1)
+    gui['offset_widgets'] = [label, widget]
+    
     w.vbox.show_all()
     log.debug("========= init =========")
     if args.image:
@@ -700,6 +788,14 @@ def gui_run():
     log.debug("set scale ratio %s", args.scale_r)
     gui['scale_r'].set_value(args.scale_r)
     gui_scale_ratio_set_cb(gui['scale_r'])
+
+    log.debug("set gravity %s", args.gravity)
+    gui['gravity'].set_active(gravity_types.index(args.gravity))
+    gui_gravity_set_cb(gui['gravity'])
+
+    log.debug("set offset %s", args.offset)
+    gui['offset'].set_value(args.offset)
+    gui_offset_set_cb(gui['offset'])
 
     # vbox.pack_start(gui_file_btn(), False, True, 0)
     # vbox.pack_start(gui_scale_btn(), False, True, 0)
@@ -735,13 +831,26 @@ def conf_save(c):
     open(conf_path, 'w').write(json.dumps(c))
 
 
+
 def conf_run(c):
-    cmd = ['wallpaper']
-    for opt in ['scale', 'color']:
-        if c[opt]:
-            cmd += ['--' + opt + '=' + c[opt]]
-    if c['image']:
-        cmd += [c['image']]
+    log.debug("======= apply conf =====")
+    bw = gtk.gdk.screen_width()
+    bh = gtk.gdk.screen_height()
+    base_pix = gtk.gdk.Pixbuf(gtk.gdk.COLORSPACE_RGB, False, 8, bw, bh)
+
+    try:
+        ovr_pix = gtk.gdk.pixbuf_new_from_file(c['image'])
+    except:
+        ovr_pix = None
+    rgba = color_to_rgba(c['color'])
+    paint_base__pix(base_pix, rgba, ovr_pix,
+                    c['scale'], c['scale_r'], c['gravity'],
+                    c['offset'])
+
+
+    name = "/tmp/wallpaper-tmp.png"
+    base_pix.save(name, "png")
+    cmd = ['wallpaper', name]
     log.debug("cmd %s", cmd)
     try:
         return sp.call(cmd)
@@ -756,8 +865,11 @@ def conf_run(c):
                     msg)        
             d.run()
             d.destroy()
-        return 1
-    
+    finally:
+        # os.remove(name)
+        pass
+        
+        
 
 def args_load():
     c = conf_load()
